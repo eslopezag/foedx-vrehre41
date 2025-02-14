@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>SQLite Code Checker</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/ace/1.4.14/ace.js" type="text/javascript" charset="utf-8"></script>
+    <style>
+        #editor {
+            height: 300px;
+            width: 100%;
+        }
+        #feedback {
+            margin-top: 20px; /* Increased margin above feedback */
+            padding: 15px; /* Increased padding inside feedback */
+            border: 1px solid #ccc;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+        .correct {
+            background-color: #d4edda;
+            color: #155724;
+        }
+        .incorrect {
+            background-color: #f8d7da;
+            color: #721c24;
+        }
+        .error {
+            background-color: #ffeeba;
+            color: #856408;
+        }
+
+        /* Style for the Run Code Button */
+        #runButton {
+            margin: 20px 0; /* Top and bottom margin for spacing */
+            padding: 10px 20px; /* Padding inside button for size */
+            font-size: 16px; /* Larger font size */
+            background-color: #007bff; /* Blue background color */
+            color: white; /* White text color */
+            border: none; /* Remove default border */
+            border-radius: 5px; /* Rounded corners */
+            cursor: pointer; /* Pointer cursor on hover */
+            transition: background-color 0.3s ease; /* Smooth background color transition */
+        }
+
+        #runButton:hover {
+            background-color: #0056b3; /* Darker blue on hover */
+        }
+
+        #runButton:focus {
+            outline: none; /* Remove default focus outline */
+            box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.5); /* Add a subtle focus box-shadow */
+        }
+    </style>
+</head>
+<body>
+    <div class="statement">
+        <p>Given a SQL table named <code>Books</code> with the following columns:</p>
+        <ul>
+        <li><code>BookID</code>: INTEGER, primary key, automatically incrementing</li>
+        <li><code>Title</code>: TEXT, the title of the book</li>
+        <li><code>Author</code>: TEXT, the author of the book</li>
+        <li><code>Category</code>: TEXT, the category of the book</li>
+        <li><code>Price</code>: REAL, the price of the book</li>
+        </ul>
+        <p>Write a query to retrieve the <code>Title</code>, <code>Author</code>, and <code>Price</code> of all books that are in the "Science Fiction" category. Sort the results by ascending <code>BookID</code>.</p>
+        <p>The expected result for the public test case is:</p>
+
+        <table style="border-collapse: collapse; width: 100%;" border="1">
+        <tbody>
+        <tr>
+        <th style="width: 37.7001%;"><strong>Title</strong></th>
+        <th style="width: 41.9214%;"><strong>Author</strong></th>
+        <th style="width: 20.3785%;"><strong>Price</strong></th>
+        </tr>
+        <tr>
+        <td style="width: 37.7001%;">Foundation</td>
+        <td style="width: 41.9214%;">Isaac Asimov</td>
+        <td style="width: 20.3785%;">12.99</td>
+        </tr>
+        <tr>
+        <td style="width: 37.7001%;">Dune</td>
+        <td style="width: 41.9214%;">Frank Herbert</td>
+        <td style="width: 20.3785%;">15.5</td>
+        </tr>
+        <tr>
+        <td style="width: 37.7001%;">The Martian</td>
+        <td style="width: 41.9214%;">Andy Weir</td>
+        <td style="width: 20.3785%;">11.75</td>
+        </tr>
+        </tbody>
+        </table>
+
+        <p><strong>Notes:</strong></p>
+        <ul>
+        <li>Use the <strong>SQLite</strong> dialect.</li>
+        <li>You don't have to write anything in the STDIN box to test your code.</li>
+        <li>You can run your queries to explore the database and test your answer until you get the desired result.</li>
+        <li>Click the "submit" button only when you're sure you got it right or your time is over.</li>
+        </ul>
+    </div>
+    <div id="editor">SELECT * FROM table_name;</div>
+    <button id="runButton">Run Code</button>
+    <div id="feedback">Waiting for code execution...</div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            var editor = ace.edit("editor");
+            editor.setTheme("ace/theme/dracula");
+            editor.session.setMode("ace/mode/sql");
+            editor.setValue("-- Write your SQLite query here\nSELECT * FROM table;");
+
+            document.getElementById('runButton').addEventListener('click', function() {
+                var code = editor.getValue();
+                var feedbackDiv = document.getElementById('feedback');
+                feedbackDiv.textContent = "Running code...";
+                feedbackDiv.className = ''; // Clear previous feedback classes
+
+                runCode(code)
+                    .then(response => {
+                        if (response.ok) {
+                            return response.json();
+                        } else if (response.status === 422) {
+                            return response.json().then(errorData => {
+                                throw new Error("Validation Error: " + JSON.stringify(errorData));
+                            });
+                        } else {
+                            throw new Error("Server Error: " + response.status + " " + response.statusText);
+                        }
+                    })
+                    .then(data => {
+                        if (data && data.passed_test_cases !== undefined) {
+                            let feedbackText = "";
+                            if (data.passed_test_cases) {
+                                feedbackText = "Correct! 🎉\n";
+                                feedbackDiv.classList.add('correct');
+                            } else {
+                                feedbackText = "Incorrect. Please try again. 😞\n";
+                                feedbackDiv.classList.add('incorrect');
+                            }
+
+                            if (data.stdout) {
+                                feedbackText += "\n--- Output ---\n";
+                                feedbackText += data.stdout; // Display stdout
+                            } else if (data.result && data.result.stderr) {
+                                feedbackText += "\n--- Execution Error ---\n";
+                                feedbackText += data.result.stderr;
+                            } else if (data.error) {
+                                feedbackText += "\n--- Error Details ---\n";
+                                feedbackText += data.error;
+                            }
+
+                            feedbackDiv.textContent = feedbackText;
+
+
+                        } else {
+                            feedbackDiv.textContent = "Unexpected response format from server.";
+                            feedbackDiv.classList.add('error');
+                        }
+                    })
+                    .catch(error => {
+                        console.error("Error running code:", error);
+                        feedbackDiv.textContent = "Error during code execution: " + error.message;
+                        feedbackDiv.classList.add('error');
+                    });
+            });
+
+            async function runCode(code) {
+                const questionId = 346; // Replace with your actual question ID if needed.
+                const endpointUrl = "https://api-thebai.factored.ai/uba/questions/run-code?tk=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ICJtbGFhcC43QGZhY3RvcmVkLmFpIiwgImV4YW1faWQiOiAxfQ.T88etbJFQjv25vJfLXgx6xfKUscPD_2GuVHym1azWHo";
+
+                const requestBody = {
+                    question_id: questionId, // Include question ID in the request
+                    user_code: code,
+                    language: "sql",
+                    stdin: ""
+                };
+
+                const headers = {
+                    'Content-Type': 'application/json'
+                    // Removed Authorization header
+                };
+
+                const requestOptions = {
+                    method: 'POST',
+                    headers: headers,
+                    body: JSON.stringify(requestBody)
+                };
+
+                return fetch(endpointUrl, requestOptions);
+            }
+        });
+    </script>
+</body>
+</html>
